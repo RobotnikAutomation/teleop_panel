@@ -1,0 +1,26 @@
+<package>
+  <name>teleop_panel</name>
+  <version>0.10.3</version>
+  <description>
+     Tutorials showing how to write plugins for RViz.
+  </description>
+  <maintainer email="mbosch@robotnik.es">Marc Bosch-Jorge</maintainer>
+  <license>BSD</license>
+
+  <url>http://ros.org/wiki/teleop_panel</url>
+  <author>Marc Bosch-Jorge</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>qtbase5-dev</build_depend>
+  <build_depend>rviz</build_depend>
+
+  <run_depend>libqt5-core</run_depend>
+  <run_depend>libqt5-gui</run_depend>
+  <run_depend>libqt5-widgets</run_depend>
+  <run_depend>rviz</run_depend>
+
+  <export>
+      <rviz plugin="${prefix}/plugin_description.xml"/>
+  </export>
+</package>
