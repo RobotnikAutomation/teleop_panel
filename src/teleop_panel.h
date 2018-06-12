@@ -35,9 +35,10 @@
 #include <rviz/panel.h>
 #endif
 
+class QCheckBox;
 class QLineEdit;
-
-namespace rviz_plugin_tutorials
+class QDoubleSpinBox;
+namespace teleop_panel
 {
 class DriveWidget;
 
@@ -93,6 +94,8 @@ protected Q_SLOTS:
   // setTopic() with the result.
   void updateTopic();
 
+  // toogledEnabled enables and disables the publishing of the commnads
+  void toggledEnabled(bool);
   // Then we finish up with protected member variables.
 protected:
   // The control-area widget which turns mouse events into command
@@ -101,6 +104,22 @@ protected:
 
   // One-line text editor for entering the outgoing ROS topic name.
   QLineEdit* output_topic_editor_;
+
+  // A checkbox that enables publishing through the topic
+  QCheckBox* enable_publish_;
+
+  // A checkbox that enables publishing when no command is pressed. At least one 0 command is publish if latch is not
+  // enabled
+  QCheckBox* latch_publish_;
+  bool latch_sent_;
+
+  // A timer to send the command periodically
+  QTimer* output_timer_;
+
+  // A spinbox to set the scale of the linear velocity
+  QDoubleSpinBox* linear_spin_;
+  // A spinbox to set the scale of the angular velocity
+  QDoubleSpinBox* angular_spin_;
 
   // The current name of the output topic.
   QString output_topic_;
@@ -115,9 +134,13 @@ protected:
   float linear_velocity_;
   float angular_velocity_;
 
+  float max_linear_velocity_;
+  float max_angular_velocity_;
+
+  bool enabled_;
   // END_TUTORIAL
 };
 
-}  // end namespace rviz_plugin_tutorials
+}  // end namespace teleop_panel
 
 #endif  // TELEOP_PANEL_H

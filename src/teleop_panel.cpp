@@ -35,13 +35,15 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QTimer>
+#include <QCheckBox>
+#include <QDoubleSpinBox>
 
 #include <geometry_msgs/Twist.h>
 
 #include "drive_widget.h"
 #include "teleop_panel.h"
 
-namespace rviz_plugin_tutorials
+namespace teleop_panel
 {
 // BEGIN_TUTORIAL
 // Here is the implementation of the TeleopPanel class.  TeleopPanel
@@ -55,7 +57,14 @@ namespace rviz_plugin_tutorials
 // passing the optional *parent* argument on to the superclass
 // constructor, and also zero-ing the velocities we will be
 // publishing.
-TeleopPanel::TeleopPanel(QWidget* parent) : rviz::Panel(parent), linear_velocity_(0), angular_velocity_(0)
+TeleopPanel::TeleopPanel(QWidget* parent)
+  : rviz::Panel(parent)
+  , linear_velocity_(0)
+  , angular_velocity_(0)
+  , max_linear_velocity_(1.0)
+  , max_angular_velocity_(1.0)
+  , enabled_(false)
+  , latch_sent_(false)
 {
   // Next we lay out the "output topic" text entry field using a
   // QLabel and a QLineEdit in a QHBoxLayout.
@@ -63,14 +72,42 @@ TeleopPanel::TeleopPanel(QWidget* parent) : rviz::Panel(parent), linear_velocity
   topic_layout->addWidget(new QLabel("Output Topic:"));
   output_topic_editor_ = new QLineEdit;
   topic_layout->addWidget(output_topic_editor_);
-
   // Then create the control widget.
   drive_widget_ = new DriveWidget;
 
   // Lay out the topic field above the control widget.
+  QVBoxLayout* control_layout = new QVBoxLayout;
+  enable_publish_ = new QCheckBox("Enabled");
+  control_layout->addWidget(enable_publish_);
+  latch_publish_ = new QCheckBox("Latched");
+  control_layout->addWidget(latch_publish_);
+
+  QHBoxLayout* linear_layout = new QHBoxLayout;
+  linear_layout->addWidget(new QLabel("Max linear:"));
+  linear_spin_ = new QDoubleSpinBox();
+  linear_spin_->setMaximum(99);  // this are the default values
+  linear_spin_->setMinimum(0);
+  linear_spin_->setValue(1);
+  linear_layout->addWidget(linear_spin_);
+
+  QHBoxLayout* angular_layout = new QHBoxLayout;
+  angular_layout->addWidget(new QLabel("Max angular:"));
+  angular_spin_ = new QDoubleSpinBox();
+  angular_spin_->setMaximum(99);  // this are the default values
+  angular_spin_->setMinimum(0);
+  angular_spin_->setValue(1);
+  angular_layout->addWidget(angular_spin_);
+
+  control_layout->addLayout(linear_layout);
+  control_layout->addLayout(angular_layout);
+
+  QHBoxLayout* enable_layout = new QHBoxLayout;
+  enable_layout->addWidget(drive_widget_);
+  enable_layout->addLayout(control_layout);
+
   QVBoxLayout* layout = new QVBoxLayout;
   layout->addLayout(topic_layout);
-  layout->addWidget(drive_widget_);
+  layout->addLayout(enable_layout);
   setLayout(layout);
 
   // Create a timer for sending the output.  Motor controllers want to
@@ -82,15 +119,13 @@ TeleopPanel::TeleopPanel(QWidget* parent) : rviz::Panel(parent), linear_velocity
   // QTimer is deleted by the QObject destructor when this TeleopPanel
   // object is destroyed.  Therefore we don't need to keep a pointer
   // to the timer.
-  QTimer* output_timer = new QTimer(this);
+  output_timer_ = new QTimer(this);
 
   // Next we make signal/slot connections.
   connect(drive_widget_, SIGNAL(outputVelocity(float, float)), this, SLOT(setVel(float, float)));
   connect(output_topic_editor_, SIGNAL(editingFinished()), this, SLOT(updateTopic()));
-  connect(output_timer, SIGNAL(timeout()), this, SLOT(sendVel()));
-
-  // Start the timer.
-  output_timer->start(100);
+  connect(output_timer_, SIGNAL(timeout()), this, SLOT(sendVel()));
+  connect(enable_publish_, SIGNAL(toggled(bool)), this, SLOT(toggledEnabled(bool)));
 
   // Make the control widget start disabled, since we don't start with an output topic.
   drive_widget_->setEnabled(false);
@@ -102,8 +137,15 @@ TeleopPanel::TeleopPanel(QWidget* parent) : rviz::Panel(parent), linear_velocity
 // next timer callback.
 void TeleopPanel::setVel(float lin, float ang)
 {
-  linear_velocity_ = lin;
-  angular_velocity_ = ang;
+  // DriveWidget velocites are
+  // lin = [+-10]
+  // and = [+-2]
+  // so we scale them with our limits
+  float max_linear = 10;
+  float max_angular = 2;
+
+  linear_velocity_ = lin * std::abs(linear_spin_->value() / max_linear);
+  angular_velocity_ = ang * std::abs(angular_spin_->value() / max_angular);
 }
 
 // Read the topic name from the QLineEdit and call setTopic() with the
@@ -145,7 +187,7 @@ void TeleopPanel::setTopic(const QString& new_topic)
   }
 
   // Gray out the control widget when the output topic is empty.
-  drive_widget_->setEnabled(output_topic_ != "");
+  // drive_widget_->setEnabled(output_topic_ != "");
 }
 
 // Publish the control velocities if ROS is not shutting down and the
@@ -154,6 +196,18 @@ void TeleopPanel::sendVel()
 {
   if (ros::ok() && velocity_publisher_)
   {
+    if (linear_velocity_ == 0 and angular_velocity_ == 0)
+    {
+      if (latch_publish_->isChecked() == false and latch_sent_ == true)
+        return;
+      else
+      {
+        latch_sent_ = true;
+      }
+    }
+    else
+      latch_sent_ = false;
+
     geometry_msgs::Twist msg;
     msg.linear.x = linear_velocity_;
     msg.linear.y = 0;
@@ -185,12 +239,23 @@ void TeleopPanel::load(const rviz::Config& config)
     updateTopic();
   }
 }
+void TeleopPanel::toggledEnabled(bool checked)
+{
+  ROS_INFO_STREAM("checked: " << checked);
+  drive_widget_->setEnabled(checked);
 
-}  // end namespace rviz_plugin_tutorials
+  if (checked == true)
+    // Start the timer.
+    output_timer_->start(100);
+  else
+    output_timer_->stop();
+}
+
+}  // end namespace teleop_panel
 
 // Tell pluginlib about this class.  Every class which should be
 // loadable by pluginlib::ClassLoader must have these two lines
 // compiled in its .cpp file, outside of any namespace scope.
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(rviz_plugin_tutorials::TeleopPanel, rviz::Panel)
+PLUGINLIB_EXPORT_CLASS(teleop_panel::TeleopPanel, rviz::Panel)
 // END_TUTORIAL

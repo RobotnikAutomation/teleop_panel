@@ -35,7 +35,7 @@
 
 #include "drive_widget.h"
 
-namespace rviz_plugin_tutorials
+namespace teleop_panel
 {
 // BEGIN_TUTORIAL
 // The DriveWidget constructor does the normal Qt thing of
@@ -242,4 +242,4 @@ void DriveWidget::stop()
 }
 // END_TUTORIAL
 
-}  // end namespace rviz_plugin_tutorials
+}  // end namespace teleop_panel

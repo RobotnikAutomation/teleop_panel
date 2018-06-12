@@ -31,7 +31,7 @@
 
 #include <QWidget>
 
-namespace rviz_plugin_tutorials
+namespace teleop_panel
 {
 // BEGIN_TUTORIAL
 // DriveWidget implements a control which translates mouse Y values
@@ -86,6 +86,6 @@ protected:
 };
 // END_TUTORIAL
 
-}  // end namespace rviz_plugin_tutorials
+}  // end namespace teleop_panel
 
 #endif  // DRIVE_WIDGET_H
