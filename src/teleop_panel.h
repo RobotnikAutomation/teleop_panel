@@ -75,27 +75,31 @@ public:
 public Q_SLOTS:
   // The control area, DriveWidget, sends its output to a Qt signal
   // for ease of re-use, so here we declare a Qt slot to receive it.
-  void setVel(float linear_velocity_, float angular_velocity_);
+  void setCmdVel(float linear_velocity_, float angular_velocity_);
 
-  // In this example setTopic() does not get connected to any signal
+  // In this example setCmdVelTopic() does not get connected to any signal
   // (it is called directly), but it is easy to define it as a public
   // slot instead of a private function in case it would be useful to
   // some other user.
-  void setTopic(const QString& topic);
+  void setCmdVelTopic(const QString& topic);
+  void setEStopTopic(const QString& topic);
 
   // Here we declare some internal slots.
 protected Q_SLOTS:
   // sendvel() publishes the current velocity values to a ROS
   // topic.  Internally this is connected to a timer which calls it 10
   // times per second.
-  void sendVel();
+  void sendCmdVel();
+  void sendEStop();
 
-  // updateTopic() reads the topic name from the QLineEdit and calls
-  // setTopic() with the result.
-  void updateTopic();
+  // updateCmdVelTopic() reads the topic name from the QLineEdit and calls
+  // setCmdVelTopic() with the result.
+  void updateCmdVelTopic();
+  void updateEStopTopic();
 
   // toogledEnabled enables and disables the publishing of the commnads
   void toggledEnabled(bool);
+  void toggledEStopEnabled(bool checked);
   // Then we finish up with protected member variables.
 protected:
   // The control-area widget which turns mouse events into command
@@ -103,29 +107,37 @@ protected:
   DriveWidget* drive_widget_;
 
   // One-line text editor for entering the outgoing ROS topic name.
-  QLineEdit* output_topic_editor_;
+  QLineEdit* cmdvel_topic_editor_;
+  // One-line text editor for entering the outgoing ROS topic name.
+  QLineEdit* estop_topic_editor_;
 
-  // A checkbox that enables publishing through the topic
-  QCheckBox* enable_publish_;
+  // A checkbox that enables publishing through the cmdvel topic
+  QCheckBox* enable_cmdvel_;
 
   // A checkbox that enables publishing when no command is pressed. At least one 0 command is publish if latch is not
   // enabled
-  QCheckBox* latch_publish_;
+  QCheckBox* latch_cmdvel_;
   bool latch_sent_;
+  
+  // A checkbox that enables publishing through the estop topic
+  QCheckBox* enable_estop_;
 
   // A timer to send the command periodically
-  QTimer* output_timer_;
+  QTimer* cmdvel_timer_;
+  QTimer* estop_timer_;
 
   // A spinbox to set the scale of the linear velocity
   QDoubleSpinBox* linear_spin_;
   // A spinbox to set the scale of the angular velocity
   QDoubleSpinBox* angular_spin_;
 
-  // The current name of the output topic.
-  QString output_topic_;
+  // The current name of the cmdvel topic.
+  QString cmdvel_topic_;
+  QString estop_topic_;
 
   // The ROS publisher for the command velocity.
   ros::Publisher velocity_publisher_;
+  ros::Publisher estop_publisher_;
 
   // The ROS node handle.
   ros::NodeHandle nh_;
