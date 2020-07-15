@@ -66,6 +66,8 @@ TeleopPanel::TeleopPanel(QWidget* parent)
   , max_angular_velocity_(1.0)
   , enabled_(false)
   , latch_sent_(false)
+  , estop_enabled_(false)
+  , estop_value_(false)
 {
   // Next we lay out the "cmdvel topic" text entry field using a
   // QLabel and a QLineEdit in a QHBoxLayout.
@@ -114,7 +116,9 @@ TeleopPanel::TeleopPanel(QWidget* parent)
   estop_layout->addWidget(new QLabel("E-Stop Topic:"));
   estop_topic_editor_ = new QLineEdit;
   estop_layout->addWidget(estop_topic_editor_);
-  enable_estop_ = new QCheckBox("");
+  value_estop_ = new QCheckBox("");
+  estop_layout->addWidget(value_estop_);
+  enable_estop_ = new QCheckBox("Enabled");
   estop_layout->addWidget(enable_estop_);
   layout->addLayout(estop_layout);
 
@@ -141,9 +145,11 @@ TeleopPanel::TeleopPanel(QWidget* parent)
   connect(enable_cmdvel_, SIGNAL(toggled(bool)), this, SLOT(toggledEnabled(bool)));
   connect(estop_topic_editor_, SIGNAL(editingFinished()), this, SLOT(updateEStopTopic()));
   connect(enable_estop_, SIGNAL(toggled(bool)), this, SLOT(toggledEStopEnabled(bool)));
+  connect(value_estop_, SIGNAL(toggled(bool)), this, SLOT(toggledEStopValue(bool)));
 
   // Make the control widget start disabled, since we don't start with an output topic.
   drive_widget_->setEnabled(false);
+  value_estop_->setEnabled(false);
 }
 
 // setCmdVel() is connected to the DriveWidget's output, which is sent
@@ -277,7 +283,7 @@ void TeleopPanel::sendEStop()
   if (ros::ok() && estop_publisher_)
   {
     std_msgs::Bool msg;
-    msg.data = true;
+    msg.data = estop_value_;
     estop_publisher_.publish(msg);
   }
 }
@@ -321,24 +327,24 @@ void TeleopPanel::toggledEnabled(bool checked)
 }
 void TeleopPanel::toggledEStopEnabled(bool checked)
 {
-  ROS_INFO_STREAM("checked: " << checked);
+  ROS_INFO_STREAM("estop: " << checked);
 
+  estop_enabled_ = checked;
   if (checked == true)
     // Start the timer.
     estop_timer_->start(100);
   else
-  {
     estop_timer_->stop();
-    if (ros::ok() && estop_publisher_)
-    {
-      std_msgs::Bool msg;
-      msg.data = false;
-      estop_publisher_.publish(msg);
-    }
-  }
+
+  value_estop_->setEnabled(checked);
 }
 
+void TeleopPanel::toggledEStopValue(bool checked)
+{
+  ROS_INFO_STREAM("estop value: " << checked);
 
+  estop_value_ = checked;
+}
 }  // end namespace teleop_panel
 
 // Tell pluginlib about this class.  Every class which should be

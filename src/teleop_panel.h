@@ -100,6 +100,7 @@ protected Q_SLOTS:
   // toogledEnabled enables and disables the publishing of the commnads
   void toggledEnabled(bool);
   void toggledEStopEnabled(bool checked);
+  void toggledEStopValue(bool checked);
   // Then we finish up with protected member variables.
 protected:
   // The control-area widget which turns mouse events into command
@@ -121,6 +122,7 @@ protected:
   
   // A checkbox that enables publishing through the estop topic
   QCheckBox* enable_estop_;
+  QCheckBox* value_estop_;
 
   // A timer to send the command periodically
   QTimer* cmdvel_timer_;
@@ -150,6 +152,8 @@ protected:
   float max_angular_velocity_;
 
   bool enabled_;
+  bool estop_enabled_;
+  bool estop_value_;
   // END_TUTORIAL
 };
 
