@@ -112,12 +112,15 @@ TeleopPanel::TeleopPanel(QWidget* parent)
   layout->addLayout(topic_layout);
   layout->addLayout(enable_layout);
 
-  QHBoxLayout* estop_layout = new QHBoxLayout;
-  estop_layout->addWidget(new QLabel("E-Stop Topic:"));
+  QHBoxLayout* estop_value_layout = new QHBoxLayout;
+  estop_value_layout->addWidget(new QLabel("E-Stop Topic:"));
   estop_topic_editor_ = new QLineEdit;
-  estop_layout->addWidget(estop_topic_editor_);
+  estop_value_layout->addWidget(estop_topic_editor_);
   value_estop_ = new QCheckBox("");
-  estop_layout->addWidget(value_estop_);
+  estop_value_layout->addWidget(value_estop_);
+  
+  QVBoxLayout* estop_layout = new QVBoxLayout;
+  estop_layout->addLayout(estop_value_layout);
   enable_estop_ = new QCheckBox("Enabled");
   estop_layout->addWidget(enable_estop_);
   layout->addLayout(estop_layout);
