@@ -52,6 +52,7 @@ DriveWidget::DriveWidget(QWidget* parent)
 // skim it.
 void DriveWidget::paintEvent(QPaintEvent* event)
 {
+  (void)event;
   // The background color and crosshair lines are drawn differently
   // depending on whether this widget is enabled or not.  This gives a
   // nice visual indication of whether the control is "live".
@@ -204,12 +205,14 @@ void DriveWidget::mousePressEvent(QMouseEvent* event)
 // robot stuck "on" without the user controlling it.
 void DriveWidget::leaveEvent(QEvent* event)
 {
+  (void)event;
   stop();
 }
 
 // The ordinary way to stop: let go of the mouse button.
 void DriveWidget::mouseReleaseEvent(QMouseEvent* event)
 {
+  (void)event;
   stop();
 }
 

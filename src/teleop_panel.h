@@ -26,137 +26,69 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #ifndef TELEOP_PANEL_H
 #define TELEOP_PANEL_H
 
 #ifndef Q_MOC_RUN
-#include <ros/ros.h>
+#include <memory>
 
-#include <rviz/panel.h>
+#include "geometry_msgs/msg/twist.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "rviz_common/panel.hpp"
 #endif
 
 class QCheckBox;
-class QLineEdit;
 class QDoubleSpinBox;
+class QLineEdit;
+class QTimer;
+
 namespace teleop_panel
 {
+
 class DriveWidget;
 
-// BEGIN_TUTORIAL
-// Here we declare our new subclass of rviz::Panel.  Every panel which
-// can be added via the Panels/Add_New_Panel menu is a subclass of
-// rviz::Panel.
-//
-// TeleopPanel will show a text-entry field to set the output topic
-// and a 2D control area.  The 2D control area is implemented by the
-// DriveWidget class, and is described there.
-class TeleopPanel : public rviz::Panel
+class TeleopPanel : public rviz_common::Panel
 {
-  // This class uses Qt slots and is a subclass of QObject, so it needs
-  // the Q_OBJECT macro.
   Q_OBJECT
+
 public:
-  // QWidget subclass constructors usually take a parent widget
-  // parameter (which usually defaults to 0).  At the same time,
-  // pluginlib::ClassLoader creates instances by calling the default
-  // constructor (with no arguments).  Taking the parameter and giving
-  // a default of 0 lets the default constructor work and also lets
-  // someone using the class for something else to pass in a parent
-  // widget as they normally would with Qt.
-  TeleopPanel(QWidget* parent = 0);
+  explicit TeleopPanel(QWidget * parent = nullptr);
 
-  // Now we declare overrides of rviz::Panel functions for saving and
-  // loading data from the config file.  Here the data is the
-  // topic name.
-  virtual void load(const rviz::Config& config);
-  virtual void save(rviz::Config config) const;
+  void load(const rviz_common::Config & config) override;
+  void save(rviz_common::Config config) const override;
 
-  // Next come a couple of public Qt slots.
 public Q_SLOTS:
-  // The control area, DriveWidget, sends its output to a Qt signal
-  // for ease of re-use, so here we declare a Qt slot to receive it.
-  void setCmdVel(float linear_velocity_, float angular_velocity_);
+  void setCmdVel(float linear_velocity, float angular_velocity);
+  void setTopic(const QString & topic);
 
-  // In this example setCmdVelTopic() does not get connected to any signal
-  // (it is called directly), but it is easy to define it as a public
-  // slot instead of a private function in case it would be useful to
-  // some other user.
-  void setCmdVelTopic(const QString& topic);
-  void setEStopTopic(const QString& topic);
-
-  // Here we declare some internal slots.
 protected Q_SLOTS:
-  // sendvel() publishes the current velocity values to a ROS
-  // topic.  Internally this is connected to a timer which calls it 10
-  // times per second.
   void sendCmdVel();
-  void sendEStop();
+  void updateTopic();
+  void toggledEnabled(bool checked);
 
-  // updateCmdVelTopic() reads the topic name from the QLineEdit and calls
-  // setCmdVelTopic() with the result.
-  void updateCmdVelTopic();
-  void updateEStopTopic();
-
-  // toogledEnabled enables and disables the publishing of the commnads
-  void toggledEnabled(bool);
-  void toggledEStopEnabled(bool checked);
-  void toggledEStopValue(bool checked);
-  // Then we finish up with protected member variables.
 protected:
-  // The control-area widget which turns mouse events into command
-  // velocities.
-  DriveWidget* drive_widget_;
+  void updatePublishingState();
+  void resetStopState();
 
-  // One-line text editor for entering the outgoing ROS topic name.
-  QLineEdit* cmdvel_topic_editor_;
-  // One-line text editor for entering the outgoing ROS topic name.
-  QLineEdit* estop_topic_editor_;
+  DriveWidget * drive_widget_;
+  QLineEdit * output_topic_editor_;
+  QCheckBox * enable_cmdvel_;
+  QDoubleSpinBox * linear_spin_;
+  QDoubleSpinBox * angular_spin_;
+  QTimer * output_timer_;
 
-  // A checkbox that enables publishing through the cmdvel topic
-  QCheckBox* enable_cmdvel_;
+  QString output_topic_;
 
-  // A checkbox that enables publishing when no command is pressed. At least one 0 command is publish if latch is not
-  // enabled
-  QCheckBox* latch_cmdvel_;
-  bool latch_sent_;
-  
-  // A checkbox that enables publishing through the estop topic
-  QCheckBox* enable_estop_;
-  QCheckBox* value_estop_;
+  std::shared_ptr<rclcpp::Node> velocity_node_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_publisher_;
 
-  // A timer to send the command periodically
-  QTimer* cmdvel_timer_;
-  QTimer* estop_timer_;
-
-  // A spinbox to set the scale of the linear velocity
-  QDoubleSpinBox* linear_spin_;
-  // A spinbox to set the scale of the angular velocity
-  QDoubleSpinBox* angular_spin_;
-
-  // The current name of the cmdvel topic.
-  QString cmdvel_topic_;
-  QString estop_topic_;
-
-  // The ROS publisher for the command velocity.
-  ros::Publisher velocity_publisher_;
-  ros::Publisher estop_publisher_;
-
-  // The ROS node handle.
-  ros::NodeHandle nh_;
-
-  // The latest velocity values from the drive widget.
   float linear_velocity_;
   float angular_velocity_;
-
-  float max_linear_velocity_;
-  float max_angular_velocity_;
-
   bool enabled_;
-  bool estop_enabled_;
-  bool estop_value_;
-  // END_TUTORIAL
+  bool stop_sent_;
 };
 
-}  // end namespace teleop_panel
+}  // namespace teleop_panel
 
 #endif  // TELEOP_PANEL_H
