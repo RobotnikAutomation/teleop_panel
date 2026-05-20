@@ -71,34 +71,6 @@ The selected message type and frame id are saved and restored with the RViz
 configuration. Older config files without these fields load as `Twist` /
 `base_link`.
 
-## Manual test procedure
-
-1. Build:
-
-   ```bash
-   colcon build --symlink-install
-   ```
-
-2. Source:
-
-   ```bash
-   source install/setup.bash
-   ```
-
-3. Launch RViz and load the panel (`Panels` -> `Add New Panel` -> `teleop_panel/Teleop`).
-4. Check the default mode:
-   - **Message type** should be `Twist`.
-   - The **Frame id** row should be hidden.
-   - After publishing, `ros2 topic info /cmd_vel` should show `geometry_msgs/msg/Twist`.
-5. Select **Message type = TwistStamped**:
-   - The **Frame id** row should appear.
-   - Set the frame id to `base_link` or another value.
-   - After publishing, `ros2 topic info /cmd_vel` should show `geometry_msgs/msg/TwistStamped`.
-   - `ros2 topic echo /cmd_vel` should show `header.stamp` and `header.frame_id`.
-6. Select **Twist** again:
-   - The **Frame id** row should be hidden.
-   - Commands should again be published as `geometry_msgs/msg/Twist`.
-
 ## Notes
 
 - The panel publishes `geometry_msgs/msg/Twist` or `geometry_msgs/msg/TwistStamped`
