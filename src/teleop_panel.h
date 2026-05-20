@@ -32,6 +32,7 @@
 
 #ifndef Q_MOC_RUN
 #include <memory>
+#include <string>
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
@@ -77,15 +78,18 @@ protected Q_SLOTS:
   void updateTopic();
   void toggledEnabled(bool checked);
   void updateMessageType();
+  void refreshTopicSuggestions();
 
 protected:
   void updatePublishingState();
   void resetStopState();
   void recreatePublishers();
   bool hasActivePublisher() const;
+  std::string getExpectedCommandTopicType() const;
+  QString getCurrentCommandTopic() const;
 
   DriveWidget * drive_widget_;
-  QLineEdit * output_topic_editor_;
+  QComboBox * command_topic_combo_;
   QCheckBox * enable_cmdvel_;
   QDoubleSpinBox * linear_spin_;
   QDoubleSpinBox * angular_spin_;
@@ -93,6 +97,7 @@ protected:
   QWidget * frame_id_row_;
   QLineEdit * frame_id_editor_;
   QTimer * output_timer_;
+  QTimer * topic_refresh_timer_;
 
   QString output_topic_;
 

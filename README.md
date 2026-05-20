@@ -5,7 +5,7 @@
 It provides:
 
 - A 2D drive widget inside RViz
-- Topic selection for velocity commands
+- An editable command topic field with live, filtered topic suggestions
 - Command message type selection (`Twist` / `TwistStamped`)
 - Enable/disable control of the publisher
 - Linear and angular velocity scaling
@@ -27,6 +27,23 @@ Once the workspace is built and sourced, the panel can be added from RViz as:
 `Panels` -> `Add New Panel` -> `teleop_panel/Teleop`
 
 In Robotnik simulation, the provided RViz configurations already include this panel.
+
+## Command topic
+
+The **Command topic** field is an editable combo box:
+
+- You can always type any topic name manually, even before the target node
+  exists. The typed topic is used as-is for publishing.
+- The drop-down lists topic suggestions discovered on the ROS 2 graph. A topic
+  is suggested only when at least one node **subscribes** to it with the
+  selected command message type (`geometry_msgs/msg/Twist` in `Twist` mode,
+  `geometry_msgs/msg/TwistStamped` in `TwistStamped` mode), so the list focuses
+  on command topics that something is actually consuming.
+- Suggestions refresh automatically every few seconds and immediately when the
+  message type changes. The refresh never overwrites or auto-selects your
+  current topic — it only updates the drop-down.
+
+Suggestions are a convenience only; they do not restrict what you can publish to.
 
 ## Command message type
 

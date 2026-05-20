@@ -8,6 +8,8 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QSignalBlocker>
+#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -27,10 +29,15 @@ TeleopPanel::TeleopPanel(QWidget * parent)
   enabled_(false),
   stop_sent_(false)
 {
+  // Editable combo box: suggests live topics but the user can always type any
+  // topic name manually (NoInsert keeps typed text out of the suggestion list).
   QHBoxLayout * topic_layout = new QHBoxLayout;
-  topic_layout->addWidget(new QLabel("Output Topic:"));
-  output_topic_editor_ = new QLineEdit;
-  topic_layout->addWidget(output_topic_editor_);
+  topic_layout->addWidget(new QLabel("Command topic:"));
+  command_topic_combo_ = new QComboBox;
+  command_topic_combo_->setEditable(true);
+  command_topic_combo_->setInsertPolicy(QComboBox::NoInsert);
+  command_topic_combo_->setDuplicatesEnabled(false);
+  topic_layout->addWidget(command_topic_combo_);
 
   // Lets the user pick which message type velocity commands are published as.
   QHBoxLayout * message_type_layout = new QHBoxLayout;
@@ -94,7 +101,12 @@ TeleopPanel::TeleopPanel(QWidget * parent)
   connect(
     drive_widget_, SIGNAL(outputVelocity(float, float)),
     this, SLOT(setCmdVel(float, float)));
-  connect(output_topic_editor_, SIGNAL(editingFinished()), this, SLOT(updateTopic()));
+  // editingFinished() fires on Enter/focus-out; activated(int) fires when the
+  // user picks a suggestion. Neither fires on programmatic combo box updates.
+  connect(
+    command_topic_combo_->lineEdit(), SIGNAL(editingFinished()),
+    this, SLOT(updateTopic()));
+  connect(command_topic_combo_, SIGNAL(activated(int)), this, SLOT(updateTopic()));
   connect(output_timer_, SIGNAL(timeout()), this, SLOT(sendCmdVel()));
   connect(enable_cmdvel_, SIGNAL(toggled(bool)), this, SLOT(toggledEnabled(bool)));
   connect(
@@ -105,6 +117,12 @@ TeleopPanel::TeleopPanel(QWidget * parent)
   output_timer_->stop();
 
   velocity_node_ = std::make_shared<rclcpp::Node>("teleop_panel_velocity_node");
+
+  // Periodically refresh the topic suggestions, plus once right now.
+  topic_refresh_timer_ = new QTimer(this);
+  connect(topic_refresh_timer_, SIGNAL(timeout()), this, SLOT(refreshTopicSuggestions()));
+  refreshTopicSuggestions();
+  topic_refresh_timer_->start(5000);
 }
 
 void TeleopPanel::setCmdVel(float lin, float ang)
@@ -122,7 +140,58 @@ void TeleopPanel::setCmdVel(float lin, float ang)
 
 void TeleopPanel::updateTopic()
 {
-  setTopic(output_topic_editor_->text());
+  setTopic(getCurrentCommandTopic());
+}
+
+QString TeleopPanel::getCurrentCommandTopic() const
+{
+  return command_topic_combo_->currentText();
+}
+
+std::string TeleopPanel::getExpectedCommandTopicType() const
+{
+  return message_type_ == CommandMessageType::TwistStamped
+    ? "geometry_msgs/msg/TwistStamped"
+    : "geometry_msgs/msg/Twist";
+}
+
+void TeleopPanel::refreshTopicSuggestions()
+{
+  // The dropdown holds live filtered suggestions only -- never a history of
+  // previously typed or selected topics.
+  //
+  // A topic is suggested only when some node *subscribes* to it with the
+  // selected message type. Keying the filter on subscribers (the consumers)
+  // instead of on the topic's advertised type is deliberate: this panel's own
+  // publisher also advertises the topic, so a type-based filter would make the
+  // currently selected topic "follow" every message type change and never drop
+  // off the list. Subscribers are unaffected by this panel's publisher.
+  const std::string expected_type = getExpectedCommandTopicType();
+
+  QStringList suggestions;
+  for (const auto & topic_entry : velocity_node_->get_topic_names_and_types()) {
+    const std::string & name = topic_entry.first;
+    for (const auto & sub : velocity_node_->get_subscriptions_info_by_topic(name)) {
+      if (sub.topic_type() == expected_type) {
+        suggestions << QString::fromStdString(name);
+        break;
+      }
+    }
+  }
+  suggestions.sort();
+  suggestions.removeDuplicates();
+
+  // Always rebuild the combo box from scratch. Clearing unconditionally -- with
+  // no "skip if unchanged" optimization -- guarantees that no stale item from a
+  // previous message type can survive a refresh or a message type change.
+  // Signals are blocked so this programmatic update cannot recreate publishers;
+  // the user's typed text is restored via setEditText() and is never added as a
+  // dropdown item.
+  const QString current_text = command_topic_combo_->currentText();
+  const QSignalBlocker blocker(command_topic_combo_);
+  command_topic_combo_->clear();
+  command_topic_combo_->addItems(suggestions);
+  command_topic_combo_->setEditText(current_text);
 }
 
 void TeleopPanel::setTopic(const QString & new_topic)
@@ -149,6 +218,10 @@ void TeleopPanel::updateMessageType()
 
   recreatePublishers();
   updatePublishingState();
+
+  // Topic suggestions are filtered by message type, so refresh them now.
+  refreshTopicSuggestions();
+
   Q_EMIT configChanged();
 }
 
@@ -244,7 +317,7 @@ void TeleopPanel::resetStopState()
 void TeleopPanel::save(rviz_common::Config config) const
 {
   rviz_common::Panel::save(config);
-  config.mapSetValue("Topic", output_topic_);
+  config.mapSetValue("Topic", getCurrentCommandTopic());
   config.mapSetValue("Enabled", enabled_);
   config.mapSetValue("MaxLinear", linear_spin_->value());
   config.mapSetValue("MaxAngular", angular_spin_->value());
@@ -260,7 +333,7 @@ void TeleopPanel::load(const rviz_common::Config & config)
 
   QString topic;
   if (config.mapGetString("Topic", &topic) || config.mapGetString("CmdVelTopic", &topic)) {
-    output_topic_editor_->setText(topic);
+    command_topic_combo_->setEditText(topic);
     setTopic(topic);
   }
 
@@ -291,6 +364,10 @@ void TeleopPanel::load(const rviz_common::Config & config)
   if (config.mapGetString("CommandMessageType", &message_type)) {
     message_type_combo_->setCurrentIndex(message_type == "TwistStamped" ? 1 : 0);
   }
+
+  // Refresh suggestions for the restored message type without touching the
+  // topic text that was just loaded.
+  refreshTopicSuggestions();
 }
 
 }  // namespace teleop_panel
