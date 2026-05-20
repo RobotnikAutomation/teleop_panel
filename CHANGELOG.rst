@@ -5,7 +5,6 @@ Changelog for package teleop_panel
 0.10.4 (2026-05-20)
 -------------------
 * Ported the package to ROS 2 with `ament_cmake`, `rclcpp` and `rviz_common`.
-* Reduced the package scope to the Teleop RViz panel only.
 * Added Robotnik teleoperation behavior:
   enable/disable publishing and linear/angular scaling.
 * Avoided continuous zero-velocity publishing while the panel remains idle.
