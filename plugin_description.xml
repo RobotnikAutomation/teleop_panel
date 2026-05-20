@@ -1,7 +1,9 @@
-<library path="lib/libteleop_panel">
-  <class name="teleop_panel/Teleop"
-         type="teleop_panel::TeleopPanel"
-         base_class_type="rviz::Panel">
+<library path="teleop_panel">
+  <class
+    name="teleop_panel/Teleop"
+    type="teleop_panel::TeleopPanel"
+    base_class_type="rviz_common::Panel"
+  >
     <description>
       A panel widget allowing simple diff-drive style robot base control.
     </description>
