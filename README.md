@@ -45,9 +45,9 @@ The **Command topic** field is an editable combo box:
 
 Suggestions are a convenience only; they do not restrict what you can publish to.
 
-## Command message type
+## Message type
 
-The panel exposes a **Command message type** combo box with two options:
+The panel exposes a **Message type** combo box with two options:
 
 - **Twist** — publishes `geometry_msgs/msg/Twist`. This is the default, kept for
   backward compatibility with existing setups.
@@ -55,10 +55,17 @@ The panel exposes a **Command message type** combo box with two options:
   `ros2_control` / `diff_drive_controller` / Nav2-style setups that expect a
   stamped command with a header.
 
-When **TwistStamped** is selected, an extra **Command frame id** row appears. Its
+When **TwistStamped** is selected, an extra **Frame id** row appears. Its
 value (default `base_link`) is written to `header.frame_id`, and `header.stamp`
 is filled with the current ROS time. The frame id row is hidden and the frame id
 is unused while **Twist** is selected.
+
+The two screenshots below show the panel in each mode — note how the **Frame id**
+row only appears in `TwistStamped` mode:
+
+| `Twist` mode | `TwistStamped` mode |
+|:---:|:---:|
+| ![Teleop panel publishing Twist](doc/GUI_Type_Twist.png) | ![Teleop panel publishing TwistStamped](doc/GUI_Type_TwistStamped.png) |
 
 The selected message type and frame id are saved and restored with the RViz
 configuration. Older config files without these fields load as `Twist` /
@@ -80,16 +87,16 @@ configuration. Older config files without these fields load as `Twist` /
 
 3. Launch RViz and load the panel (`Panels` -> `Add New Panel` -> `teleop_panel/Teleop`).
 4. Check the default mode:
-   - **Command message type** should be `Twist`.
-   - The **Command frame id** row should be hidden.
+   - **Message type** should be `Twist`.
+   - The **Frame id** row should be hidden.
    - After publishing, `ros2 topic info /cmd_vel` should show `geometry_msgs/msg/Twist`.
-5. Select **Command message type = TwistStamped**:
-   - The **Command frame id** row should appear.
+5. Select **Message type = TwistStamped**:
+   - The **Frame id** row should appear.
    - Set the frame id to `base_link` or another value.
    - After publishing, `ros2 topic info /cmd_vel` should show `geometry_msgs/msg/TwistStamped`.
    - `ros2 topic echo /cmd_vel` should show `header.stamp` and `header.frame_id`.
 6. Select **Twist** again:
-   - The **Command frame id** row should be hidden.
+   - The **Frame id** row should be hidden.
    - Commands should again be published as `geometry_msgs/msg/Twist`.
 
 ## Notes
