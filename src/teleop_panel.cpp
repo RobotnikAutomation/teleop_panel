@@ -3,12 +3,14 @@
 #include <cmath>
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWidget>
 
 #include "pluginlib/class_list_macros.hpp"
 
@@ -19,6 +21,7 @@ namespace teleop_panel
 
 TeleopPanel::TeleopPanel(QWidget * parent)
 : rviz_common::Panel(parent),
+  message_type_(CommandMessageType::Twist),
   linear_velocity_(0.0f),
   angular_velocity_(0.0f),
   enabled_(false),
@@ -28,6 +31,25 @@ TeleopPanel::TeleopPanel(QWidget * parent)
   topic_layout->addWidget(new QLabel("Output Topic:"));
   output_topic_editor_ = new QLineEdit;
   topic_layout->addWidget(output_topic_editor_);
+
+  // Lets the user pick which message type velocity commands are published as.
+  QHBoxLayout * message_type_layout = new QHBoxLayout;
+  message_type_layout->addWidget(new QLabel("Message type:"));
+  message_type_combo_ = new QComboBox;
+  message_type_combo_->addItem("Twist");
+  message_type_combo_->addItem("TwistStamped");
+  message_type_combo_->setCurrentIndex(0);
+  message_type_layout->addWidget(message_type_combo_);
+
+  // Self-contained row so it can be shown/hidden as a single unit.
+  // Only relevant (and only visible) when publishing TwistStamped.
+  frame_id_row_ = new QWidget;
+  QHBoxLayout * frame_id_layout = new QHBoxLayout(frame_id_row_);
+  frame_id_layout->setContentsMargins(0, 0, 0, 0);
+  frame_id_layout->addWidget(new QLabel("Frame id:"));
+  frame_id_editor_ = new QLineEdit("base_link");
+  frame_id_layout->addWidget(frame_id_editor_);
+  frame_id_row_->setVisible(false);
 
   drive_widget_ = new DriveWidget;
 
@@ -62,6 +84,8 @@ TeleopPanel::TeleopPanel(QWidget * parent)
 
   QVBoxLayout * layout = new QVBoxLayout;
   layout->addLayout(topic_layout);
+  layout->addLayout(message_type_layout);
+  layout->addWidget(frame_id_row_);
   layout->addLayout(teleop_layout);
   setLayout(layout);
 
@@ -73,6 +97,9 @@ TeleopPanel::TeleopPanel(QWidget * parent)
   connect(output_topic_editor_, SIGNAL(editingFinished()), this, SLOT(updateTopic()));
   connect(output_timer_, SIGNAL(timeout()), this, SLOT(sendCmdVel()));
   connect(enable_cmdvel_, SIGNAL(toggled(bool)), this, SLOT(toggledEnabled(bool)));
+  connect(
+    message_type_combo_, SIGNAL(currentIndexChanged(int)),
+    this, SLOT(updateMessageType()));
 
   drive_widget_->setEnabled(false);
   output_timer_->stop();
@@ -105,20 +132,56 @@ void TeleopPanel::setTopic(const QString & new_topic)
   }
 
   output_topic_ = new_topic;
-  velocity_publisher_.reset();
-
-  if (!output_topic_.isEmpty()) {
-    velocity_publisher_ = velocity_node_->create_publisher<geometry_msgs::msg::Twist>(
-      output_topic_.toStdString(), 1);
-  }
+  recreatePublishers();
 
   updatePublishingState();
   Q_EMIT configChanged();
 }
 
+void TeleopPanel::updateMessageType()
+{
+  message_type_ = message_type_combo_->currentIndex() == 1
+    ? CommandMessageType::TwistStamped
+    : CommandMessageType::Twist;
+
+  // The frame id only applies to TwistStamped, so hide its row otherwise.
+  frame_id_row_->setVisible(message_type_ == CommandMessageType::TwistStamped);
+
+  recreatePublishers();
+  updatePublishingState();
+  Q_EMIT configChanged();
+}
+
+void TeleopPanel::recreatePublishers()
+{
+  // Keep only the publisher for the currently selected message type alive,
+  // both following the configured topic name.
+  twist_pub_.reset();
+  twist_stamped_pub_.reset();
+
+  if (output_topic_.isEmpty()) {
+    return;
+  }
+
+  if (message_type_ == CommandMessageType::TwistStamped) {
+    twist_stamped_pub_ = velocity_node_->create_publisher<geometry_msgs::msg::TwistStamped>(
+      output_topic_.toStdString(), 1);
+  } else {
+    twist_pub_ = velocity_node_->create_publisher<geometry_msgs::msg::Twist>(
+      output_topic_.toStdString(), 1);
+  }
+}
+
+bool TeleopPanel::hasActivePublisher() const
+{
+  return message_type_ == CommandMessageType::TwistStamped
+    ? twist_stamped_pub_ != nullptr
+    : twist_pub_ != nullptr;
+}
+
 void TeleopPanel::sendCmdVel()
 {
-  if (!enabled_ || !rclcpp::ok() || !velocity_publisher_) {
+  if (!enabled_ || !rclcpp::ok() || !hasActivePublisher()) {
     return;
   }
 
@@ -127,10 +190,20 @@ void TeleopPanel::sendCmdVel()
     return;
   }
 
-  geometry_msgs::msg::Twist msg;
-  msg.linear.x = linear_velocity_;
-  msg.angular.z = angular_velocity_;
-  velocity_publisher_->publish(msg);
+  // Compute the velocity command once and reuse it for either message type.
+  geometry_msgs::msg::Twist twist;
+  twist.linear.x = linear_velocity_;
+  twist.angular.z = angular_velocity_;
+
+  if (message_type_ == CommandMessageType::TwistStamped) {
+    geometry_msgs::msg::TwistStamped stamped;
+    stamped.header.stamp = velocity_node_->now();
+    stamped.header.frame_id = frame_id_editor_->text().toStdString();
+    stamped.twist = twist;
+    twist_stamped_pub_->publish(stamped);
+  } else {
+    twist_pub_->publish(twist);
+  }
 
   stop_sent_ = stopped;
 }
@@ -148,7 +221,7 @@ void TeleopPanel::toggledEnabled(bool checked)
 
 void TeleopPanel::updatePublishingState()
 {
-  const bool can_publish = enabled_ && !output_topic_.isEmpty() && velocity_publisher_ != nullptr;
+  const bool can_publish = enabled_ && !output_topic_.isEmpty() && hasActivePublisher();
 
   drive_widget_->setEnabled(can_publish);
 
@@ -175,6 +248,10 @@ void TeleopPanel::save(rviz_common::Config config) const
   config.mapSetValue("Enabled", enabled_);
   config.mapSetValue("MaxLinear", linear_spin_->value());
   config.mapSetValue("MaxAngular", angular_spin_->value());
+  config.mapSetValue(
+    "CommandMessageType",
+    QString(message_type_ == CommandMessageType::TwistStamped ? "TwistStamped" : "Twist"));
+  config.mapSetValue("CommandFrameId", frame_id_editor_->text());
 }
 
 void TeleopPanel::load(const rviz_common::Config & config)
@@ -200,6 +277,19 @@ void TeleopPanel::load(const rviz_common::Config & config)
   float max_angular = 0.0f;
   if (config.mapGetFloat("MaxAngular", &max_angular)) {
     angular_spin_->setValue(max_angular);
+  }
+
+  // Older config files omit these keys; defaults stay Twist / "base_link".
+  QString frame_id;
+  if (config.mapGetString("CommandFrameId", &frame_id)) {
+    frame_id_editor_->setText(frame_id);
+  }
+
+  // Setting the combo index drives updateMessageType(), which restores the
+  // frame id row visibility and recreates the matching publisher.
+  QString message_type;
+  if (config.mapGetString("CommandMessageType", &message_type)) {
+    message_type_combo_->setCurrentIndex(message_type == "TwistStamped" ? 1 : 0);
   }
 }
 

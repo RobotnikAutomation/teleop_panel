@@ -34,19 +34,29 @@
 #include <memory>
 
 #include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rviz_common/panel.hpp"
 #endif
 
 class QCheckBox;
+class QComboBox;
 class QDoubleSpinBox;
 class QLineEdit;
 class QTimer;
+class QWidget;
 
 namespace teleop_panel
 {
 
 class DriveWidget;
+
+// Selects which message type the panel publishes velocity commands as.
+enum class CommandMessageType
+{
+  Twist,
+  TwistStamped
+};
 
 class TeleopPanel : public rviz_common::Panel
 {
@@ -66,22 +76,31 @@ protected Q_SLOTS:
   void sendCmdVel();
   void updateTopic();
   void toggledEnabled(bool checked);
+  void updateMessageType();
 
 protected:
   void updatePublishingState();
   void resetStopState();
+  void recreatePublishers();
+  bool hasActivePublisher() const;
 
   DriveWidget * drive_widget_;
   QLineEdit * output_topic_editor_;
   QCheckBox * enable_cmdvel_;
   QDoubleSpinBox * linear_spin_;
   QDoubleSpinBox * angular_spin_;
+  QComboBox * message_type_combo_;
+  QWidget * frame_id_row_;
+  QLineEdit * frame_id_editor_;
   QTimer * output_timer_;
 
   QString output_topic_;
 
   std::shared_ptr<rclcpp::Node> velocity_node_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_stamped_pub_;
+
+  CommandMessageType message_type_;
 
   float linear_velocity_;
   float angular_velocity_;
