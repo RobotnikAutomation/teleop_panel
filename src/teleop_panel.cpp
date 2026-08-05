@@ -140,7 +140,9 @@ void TeleopPanel::setCmdVel(float lin, float ang)
 
 void TeleopPanel::updateTopic()
 {
-  setTopic(getCurrentCommandTopic());
+  const QString topic = getCurrentCommandTopic();
+  applyInferredMessageTypeForTopic(topic);
+  setTopic(topic);
 }
 
 QString TeleopPanel::getCurrentCommandTopic() const
@@ -155,24 +157,70 @@ std::string TeleopPanel::getExpectedCommandTopicType() const
     : "geometry_msgs/msg/Twist";
 }
 
+int TeleopPanel::inferMessageTypeComboIndexFromSubscribers(const QString & topic) const
+{
+  if (topic.isEmpty()) {
+    return -1;
+  }
+
+  bool has_twist_subscriber = false;
+  bool has_twist_stamped_subscriber = false;
+
+  try {
+    for (const auto & sub : velocity_node_->get_subscriptions_info_by_topic(topic.toStdString())) {
+      const std::string & topic_type = sub.topic_type();
+      if (topic_type == "geometry_msgs/msg/Twist") {
+        has_twist_subscriber = true;
+      } else if (topic_type == "geometry_msgs/msg/TwistStamped") {
+        has_twist_stamped_subscriber = true;
+      }
+
+      if (has_twist_subscriber && has_twist_stamped_subscriber) {
+        break;
+      }
+    }
+  } catch (const std::exception &) {
+    // Invalid topic text should not break the panel while editing/confirming.
+    return -1;
+  }
+
+  // Only auto-switch when subscriber type is unambiguous.
+  if (has_twist_subscriber == has_twist_stamped_subscriber) {
+    return -1;
+  }
+
+  return has_twist_stamped_subscriber ? 1 : 0;
+}
+
+void TeleopPanel::applyInferredMessageTypeForTopic(const QString & topic)
+{
+  // If subscribers on this topic clearly indicate one supported command
+  // message type, switch the UI to match before creating publishers.
+  const int inferred_index = inferMessageTypeComboIndexFromSubscribers(topic);
+  if (inferred_index >= 0 && message_type_combo_->currentIndex() != inferred_index) {
+    message_type_combo_->setCurrentIndex(inferred_index);
+  }
+}
+
 void TeleopPanel::refreshTopicSuggestions()
 {
   // The dropdown holds live filtered suggestions only -- never a history of
   // previously typed or selected topics.
   //
-  // A topic is suggested only when some node *subscribes* to it with the
-  // selected message type. Keying the filter on subscribers (the consumers)
-  // instead of on the topic's advertised type is deliberate: this panel's own
-  // publisher also advertises the topic, so a type-based filter would make the
-  // currently selected topic "follow" every message type change and never drop
-  // off the list. Subscribers are unaffected by this panel's publisher.
-  const std::string expected_type = getExpectedCommandTopicType();
+  // A topic is suggested when some node *subscribes* to it as either
+  // geometry_msgs/msg/Twist or geometry_msgs/msg/TwistStamped. Filtering on
+  // subscribers (consumers) instead of advertised topic types avoids feedback
+  // from this panel's own publisher.
 
   QStringList suggestions;
   for (const auto & topic_entry : velocity_node_->get_topic_names_and_types()) {
     const std::string & name = topic_entry.first;
     for (const auto & sub : velocity_node_->get_subscriptions_info_by_topic(name)) {
-      if (sub.topic_type() == expected_type) {
+      const std::string & topic_type = sub.topic_type();
+      if (
+        topic_type == "geometry_msgs/msg/Twist" ||
+        topic_type == "geometry_msgs/msg/TwistStamped")
+      {
         suggestions << QString::fromStdString(name);
         break;
       }
@@ -236,12 +284,17 @@ void TeleopPanel::recreatePublishers()
     return;
   }
 
-  if (message_type_ == CommandMessageType::TwistStamped) {
-    twist_stamped_pub_ = velocity_node_->create_publisher<geometry_msgs::msg::TwistStamped>(
-      output_topic_.toStdString(), 1);
-  } else {
-    twist_pub_ = velocity_node_->create_publisher<geometry_msgs::msg::Twist>(
-      output_topic_.toStdString(), 1);
+  const std::string topic = output_topic_.toStdString();
+  try {
+    if (message_type_ == CommandMessageType::TwistStamped) {
+      twist_stamped_pub_ = velocity_node_->create_publisher<geometry_msgs::msg::TwistStamped>(
+        topic, 1);
+    } else {
+      twist_pub_ = velocity_node_->create_publisher<geometry_msgs::msg::Twist>(
+        topic, 1);
+    }
+  } catch (const std::exception &) {
+    // Keep panel alive when the current topic text is invalid.
   }
 }
 

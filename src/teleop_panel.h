@@ -85,6 +85,8 @@ protected:
   void resetStopState();
   void recreatePublishers();
   bool hasActivePublisher() const;
+  void applyInferredMessageTypeForTopic(const QString & topic);
+  int inferMessageTypeComboIndexFromSubscribers(const QString & topic) const;
   std::string getExpectedCommandTopicType() const;
   QString getCurrentCommandTopic() const;
 
