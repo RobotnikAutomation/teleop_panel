@@ -371,7 +371,6 @@ void TeleopPanel::save(rviz_common::Config config) const
 {
   rviz_common::Panel::save(config);
   config.mapSetValue("Topic", getCurrentCommandTopic());
-  config.mapSetValue("Enabled", enabled_);
   config.mapSetValue("MaxLinear", linear_spin_->value());
   config.mapSetValue("MaxAngular", angular_spin_->value());
   config.mapSetValue(
@@ -388,11 +387,6 @@ void TeleopPanel::load(const rviz_common::Config & config)
   if (config.mapGetString("Topic", &topic) || config.mapGetString("CmdVelTopic", &topic)) {
     command_topic_combo_->setEditText(topic);
     setTopic(topic);
-  }
-
-  bool enabled = false;
-  if (config.mapGetBool("Enabled", &enabled)) {
-    enable_cmdvel_->setChecked(enabled);
   }
 
   float max_linear = 0.0f;
